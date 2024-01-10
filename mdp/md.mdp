@@ -1,0 +1,63 @@
+define =
+integrator = md
+dt         = 0.002   ; ps
+nsteps     = 100000000
+comm-grps  = protein_lig
+comm-mode  = angular
+energygrps = 
+;
+nstxout = 0
+nstvout = 0
+nstfout = 0
+nstlog  = 5000
+nstenergy = 1000
+nstxout-compressed = 1000
+compressed-x-grps  = system
+;
+pbc = xyz
+cutoff-scheme = Verlet
+coulombtype   = PME
+rcoulomb      = 1.0
+vdwtype       = cut-off
+rvdw          = 1.0
+DispCorr      = EnerPres
+;
+Tcoupl  = V-rescale
+tau_t   = 0.2 0.2
+tc_grps = protein_lig envir
+ref_t   = 298.15 298.15
+;
+Pcoupl     = parrinello-rahman
+pcoupltype = isotropic
+tau_p = 2.0
+ref_p = 1.0
+compressibility = 4.5e-5
+;
+freezegrps  = 
+freezedim   = 
+constraints = hbonds
+; Pull code
+pull                 = yes
+pull_coord1_type     = umbrella
+pull-ngroups         = 5
+pull-ncoords         = 4
+pull-group1-name     = ZN
+pull-group2-name     = a_2026
+pull-group3-name     = a_2699
+pull-group4-name     = a_4721
+pull-group5-name     = a_5231
+pull_coord1_geometry = distance 
+pull-coord1-groups   = 1 2
+pull-coord2-groups   = 1 3
+pull-coord3-groups   = 1 4
+pull-coord4-groups   = 1 5
+pull_coord1_dim      = Y Y Y
+pull-coord1-rate     = 0.0
+pull-coord2-rate     = 0.0 
+pull-coord3-rate     = 0.0 
+pull-coord4-rate     = 0.0  
+pull-coord1-k        = 1000 ; kJ mol^-1 nm^-2
+pull-coord2-k        = 1000 ; kJ mol^-1 nm^-2
+pull-coord3-k        = 1000 ; kJ mol^-1 nm^-2
+pull-coord4-k        = 1000 ; kJ mol^-1 nm^-2
+pull_coord1_start    = yes 

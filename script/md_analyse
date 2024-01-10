@@ -1,0 +1,149 @@
+#!/bin/bash
+# 分析带离子的蛋白
+# 消除周期性边界 将蛋白（组1）置于系统中心
+gmx trjconv -s md.tpr -f md.xtc -o md.xtc -center -pbc mol -n index.ndx << EOF
+1
+0
+EOF
+
+mkdir MMPBSA
+cd MMPBSA
+#提取最后50ns的轨迹
+gmx trjconv -s ../md.tpr -f ../md.xtc -o traj5000.xtc -b 150000 -e 200000 -dt 10 << EOF
+0
+EOF
+
+cp ../*.itp .
+cp ../*.ndx .
+cp ../md.tpr .
+cp ../*.top .
+cp /home/wei/software/md_file/mmpbsa.in .
+cp -r /home/wei/software/md_file/*.ff . 
+
+conda activate gmxMMPBSA
+
+mpirun -np 16 gmx_MMPBSA -O -i mmpbsa.in -cs md.tpr -ci index.ndx -cg 24 14 -ct traj5000.xtc -cp topol.top -o FINAL_RESULTS_MMPBSA.dat -eo FINAL_RESULTS_MMPBSA.csv
+
+conda deactivate
+
+cd ..
+mkdir md_data
+cd md_data/
+#计算RMSD
+gmx rms -s ../md.tpr -f ../md.xtc -o RMSD_proteinfitprotein.xvg -tu ns << EOF
+1
+1
+EOF
+
+gmx rms -s ../md.tpr -f ../md.xtc -o RMSD_ligandfitprotein.xvg -tu ns << EOF
+1
+14
+EOF
+
+gmx rms -s ../md.tpr -f ../md.xtc -n ../index.ndx -o RMSD_complex.xvg -tu ns << EOF
+24
+24
+EOF
+
+#计算蛋白的RMSF
+gmx rmsf -s ../md.tpr -f ../md.xtc -n ../index.ndx -b 150000 -o rmsf_protein.xvg -ox bfac.pdb -res << EOF
+24
+EOF
+
+#蛋白质回旋半径
+gmx gyrate -s ../md.tpr -f ../md.xtc -n ../index.ndx -o gyrate_complex.xvg << EOF
+24
+EOF
+
+#径向分布函数
+# gmx rdf -s ../md.tpr -f ../md.xtc -o rdf.xvg -n index.ndx -ref Protein -sel LIG -bin 0.01 -surf mol 
+
+#计算氢键
+gmx hbond -s ../md.tpr -f ../md.xtc -n ../index.ndx -hbn -hbm -nomerge << EOF
+1
+14
+EOF
+
+#SASA
+gmx sasa -s ../md.tpr -f ../md.xtc  -n ../index.ndx -o area_complex.xvg << EOF
+24
+EOF
+
+#计算蛋白配体势能
+#echo " ================ extract the prolig energy =================== "
+#gmx make_ndx -f md.gro -o prolig.ndx
+#gmx trjconv -f md.xtc -s md.tpr -n prolig.ndx -o prolig.xtc
+#gmx convert-tpr -s md.tpr -n prolig.ndx -o prolig.tpr
+#gmx mdrun -s prolig.tpr -rerun prolig.xtc -e prolig.edr
+#gmx energy -f prolig.edr -o prolig_SR.xvg
+
+cd ..
+mkdir FEL
+cd FEL
+#提取最后50ns的轨迹
+gmx trjconv -s ../md.tpr -f ../md.xtc -n ../index.ndx -o md50ns.xtc -b 150000 -e 200000 << EOF
+24
+EOF
+# 用下行的命令去除蛋白复合物的平动和转动
+gmx trjconv -s ../md.tpr -f md50ns.xtc -n ../index.ndx -o fit.xtc -fit rot+trans << EOF
+24
+24
+EOF
+
+# 利用主成分绘制FEL
+gmx covar -s ../md.tpr -f fit.xtc -n ../index.ndx -o eigenvalues.xvg -v eigenvectors.trr -xpma covapic.xpm  << EOF
+4
+4
+EOF
+
+#eigenvalues.xvg里面记录了分析得出的多个本征值的序号和大小
+#eigenvectors.trr即是投影到本征向量之后的轨迹
+#covapic.xpm即是轨迹的协方差矩阵
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 1 -last 1 -proj pc1.xvg << EOF
+4
+4
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 2 -last 2 -proj pc2.xvg << EOF
+4
+4
+EOF
+
+pc_combine.py pc1.xvg pc2.xvg pc12_sham.xvg
+
+gmx sham -tsham 310 -nlevels 100 -f pc12_sham.xvg -ls pc12_gibbs.xpm -g pc_12.log -lsh pc12_enthalpy.xpm -lss pc12_entropy.xpm 
+
+cd ..
+mkdir PCA
+cd PCA
+
+# 用下行的命令去除蛋白复合物的平动和转动
+gmx trjconv -s ../md.tpr -f ../md.xtc -n ../index.ndx -o fit.xtc -fit rot+trans << EOF
+24
+24
+EOF
+
+gmx covar -s ../md.tpr -f fit.xtc -n ../index.ndx -o eigenvalues.xvg -v eigenvectors.trr -xpma covapic.xpm << EOF
+24
+24
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 1 -last 1 -proj pc1.xvg << EOF
+24
+24
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 2 -last 2 -proj pc2.xvg << EOF
+24
+24
+EOF
+
+# 本征向量绘制豪猪图
+gmx anaeig -s ../md.tpr -f fit.xtc -n ../index.ndx -v eigenvectors.trr -eig eigenvalues.xvg -proj proj_ev.xvg -extr ev.pdb -rmsf rmsf_ev.xvg -first 1 -last 1  << EOF
+24
+24
+EOF
+# modevectors ev,ev,1,2
+
+

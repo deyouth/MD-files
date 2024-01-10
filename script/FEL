@@ -1,0 +1,112 @@
+#!/bin/bash
+
+mkdir FEL
+cd FEL
+#提取最后50ns的轨迹
+gmx trjconv -s ../md.tpr -f ../md.xtc -n ../index.ndx -o md50ns.xtc -b 150000 -e 200000 << EOF
+24
+EOF
+# 用下行的命令去除蛋白复合物的平动和转动
+gmx trjconv -s ../md.tpr -f md50ns.xtc -n ../index.ndx -o fit.xtc -fit rot+trans << EOF
+24
+24
+EOF
+
+# 利用主成分绘制FEL
+gmx covar -s ../md.tpr -f fit.xtc -n ../index.ndx -o eigenvalues.xvg -v eigenvectors.trr -xpma covapic.xpm  << EOF
+4
+4
+EOF
+
+#eigenvalues.xvg里面记录了分析得出的多个本征值的序号和大小
+#eigenvectors.trr即是投影到本征向量之后的轨迹
+#covapic.xpm即是轨迹的协方差矩阵
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 1 -last 1 -proj pc1.xvg << EOF
+4
+4
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 2 -last 2 -proj pc2.xvg << EOF
+4
+4
+EOF
+
+pc_combine.py pc1.xvg pc2.xvg pc12_sham.xvg
+
+gmx sham -tsham 310 -nlevels 100 -f pc12_sham.xvg -ls pc12_gibbs.xpm -g pc_12.log -lsh pc12_enthalpy.xpm -lss pc12_entropy.xpm 
+
+cd ..
+mkdir PCA200ns
+cd PCA200ns
+# 用下行的命令去除蛋白复合物的平动和转动
+gmx trjconv -s ../md.tpr -f ../md.xtc -n ../index.ndx -o fit.xtc -fit rot+trans << EOF
+24
+24
+EOF
+
+gmx covar -s ../md.tpr -f fit.xtc -n ../index.ndx -o eigenvalues.xvg -v eigenvectors.trr -xpma covapic.xpm << EOF
+4
+4
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 1 -last 1 -proj pc1.xvg << EOF
+4
+4
+EOF
+
+gmx anaeig -s ../md.tpr -f fit.xtc -v eigenvectors.trr -first 2 -last 2 -proj pc2.xvg << EOF
+4
+4
+EOF
+
+# 本征向量绘制豪猪图
+gmx anaeig -s ../md.tpr -f fit.xtc -n ../index.ndx -v eigenvectors.trr -eig eigenvalues.xvg -proj proj_ev.xvg -extr ev.pdb -rmsf rmsf_ev.xvg -first 1 -last 1  << EOF
+4
+4
+EOF
+
+modevectors ev,ev,1,2
+
+# 导出固定的帧 可输入轨迹中的第一帧，即0 ps时的结构，通过“-dump”可指定时间，单位为ps
+# gmx trjconv -s ../md.tpr -f md50ns.xtc -n ../index.ndx -o first.pdb -dump 0
+
+
+# gmx check -f fit.xtc
+
+# gmx rms -s md.tpr -f fit.xtc -o rmsd.xvg
+
+# gmx gyrate -s md.tpr -f fit.xtc -o gyrate.xvg
+
+# gmx sham -tsham 310 -nlevels 100 -f output.xvg -ls gibbs.xpm -g gibbs.log -lsh enthalpy.xpm -lss entropy.xpm
+
+#-tsham ： 设定温度
+#-nlevels： 设定FEL的层次数量
+#-f : 读入组合文件
+#-ls : 输出自由能形貌图（Gibbs自由能）
+#-g ：输出log文件
+#-lsh : 焓的形貌图
+#-lss : 熵的形貌图
+
+# python xpm2txt.py -f pc12_gibbs.xpm -o energy.txt
+
+# python xpm2png.py -ip yes -f pc12_gibbs.xpm
+
+# 
+# gmx mdmat绘制残基接触图
+
+# gmx mdmat -s pro.tpr -f pro.xtc -mean dm.xpm -frames dmf.xpm -no num.xpm -nlevels 1501 -t 1.5 
+
+# 本征向量绘制豪猪图
+
+# gmx anaeig -s md.tpr -f md.xtc -v eigenvectors.trr -eig eigenvalues.xvg -proj proj_ev.xvg -extr ev.pdb -rmsf rmsf_ev.xvg -first 1 -last 1
+
+
+
+
+
+
+
+
+
+
